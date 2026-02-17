@@ -1,16 +1,12 @@
 const express = require("express");
 const router = express.Router();
-
+const { generateBaseline } = require("../scripts/baselineGenerator");
 const Log = require("../models/Log");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
-
 const { predictLog } = require("../services/mlService");
 
 
-// -----------------------------
-// Create Normal Log
-// -----------------------------
 router.post("/", async (req, res) => {
   try {
     const log = await Log.create(req.body);
@@ -35,10 +31,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-
-// -----------------------------
-// Get Alerts
-// -----------------------------
 router.get("/alerts", async (req, res) => {
   try {
     const alerts = await Alert.find().sort({ timestamp: -1 });
@@ -48,10 +40,6 @@ router.get("/alerts", async (req, res) => {
   }
 });
 
-
-// -----------------------------
-// Get Dashboard Stats
-// -----------------------------
 router.get("/stats", async (req, res) => {
   try {
     const users = await User.countDocuments();
@@ -65,9 +53,7 @@ router.get("/stats", async (req, res) => {
 });
 
 
-// -----------------------------
-// Simulate Attack
-// -----------------------------
+
 router.post("/simulate", async (req, res) => {
   try {
     const users = await User.find();
@@ -112,5 +98,17 @@ router.post("/simulate", async (req, res) => {
     res.status(500).json({ error: "Simulation failed" });
   }
 });
+
+
+router.post("/baseline", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const result = await generateBaseline(userId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 module.exports = router;
