@@ -23,28 +23,35 @@ function trainModel(trainingData) {
 }
 
 function detectAnomaly(features) {
-    return new Promise((resolve, reject) => {
-        const process = spawn(PYTHON_PATH, [
-            SCRIPT_PATH,
-            "predict",
-            JSON.stringify(features)
-        ]);
+  return new Promise((resolve, reject) => {
+    const process = spawn("python", [
+      SCRIPT_PATH,
+      "predict",
+      JSON.stringify(features)
+    ]);
 
-        let result = "";
+    let result = "";
+    let errorOutput = "";
 
-        process.stdout.on("data", (data) => {
-            result += data.toString();
-        });
-
-        process.on("close", (code) => {
-            if (code === 0) {
-                resolve(JSON.parse(result));
-            } else {
-                reject("Prediction failed");
-            }
-        });
+    process.stdout.on("data", (data) => {
+      result += data.toString();
     });
+
+    process.stderr.on("data", (data) => {
+      errorOutput += data.toString();
+    });
+
+    process.on("close", (code) => {
+      if (code === 0) {
+        resolve(JSON.parse(result));
+      } else {
+        console.error("Python Error:", errorOutput);
+        reject(errorOutput);
+      }
+    });
+  });
 }
+
 
 module.exports = {
     trainModel,

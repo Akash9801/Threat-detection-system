@@ -1,17 +1,20 @@
+
+
 const express = require("express");
 const router = express.Router();
 const { generateBaseline } = require("../scripts/baselineGenerator");
 const Log = require("../models/Log");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
-const { predictLog } = require("../services/mlService");
+const { detectAnomaly } = require("../services/mlService");
+
 
 
 router.post("/", async (req, res) => {
   try {
     const log = await Log.create(req.body);
 
-    const mlResult = await predictLog(req.body);
+    const mlResult = await detectAnomaly(req.body);
 
     if (mlResult && mlResult.prediction === -1) {
       await Alert.create({
@@ -77,27 +80,42 @@ router.post("/simulate", async (req, res) => {
       sensitive_access: true
     };
 
+    
     const log = await Log.create(attackLog);
 
-    const mlResult = await predictLog(attackLog);
+    const features = [
+      attackLog.login_hour,
+      attackLog.files_accessed,
+      attackLog.download_mb,
+      1, 
+      1  
+    ];
 
-    if (mlResult && mlResult.prediction === -1) {
+  
+    const mlResult = await detectAnomaly(features);
+
+    if (mlResult.isAnomaly) {
       await Alert.create({
         log_id: log.log_id,
         user_id: log.user_id,
         timestamp: log.timestamp,
-        anomaly_score: mlResult.anomaly_score,
-        prediction: mlResult.prediction,
-        feature_breakdown: mlResult.feature_breakdown
+        anomaly_score: mlResult.score,
+        threshold: mlResult.threshold
       });
     }
 
-    res.json({ success: true, attackLog, mlResult });
+    res.json({
+      success: true,
+      attackLog,
+      mlResult
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Simulation failed" });
   }
 });
+
 
 
 router.post("/baseline", async (req, res) => {

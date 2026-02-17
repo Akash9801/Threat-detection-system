@@ -1,12 +1,14 @@
 import sys
+import os
 import json
 import joblib
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
-MODEL_PATH = "server/ml_models/isolation_model.pkl"
-SCALER_PATH = "server/ml_models/scaler.pkl"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "../ml_models/isolation_model.pkl")
+SCALER_PATH = os.path.join(BASE_DIR, "../ml_models/scaler.pkl")
 
 ANOMALY_THRESHOLD = 0.85
 
@@ -38,11 +40,9 @@ def predict(features):
 
     raw_score = model.decision_function(X_scaled)[0]
 
-    # Normalize to 0–1 anomaly score
     anomaly_score = 1 - (raw_score + 0.5)
     anomaly_score = max(0, min(1, anomaly_score))
 
-    # Hybrid Boost Logic
     login_hour, files_accessed, download_mb, new_ip, new_device = features
 
     if new_ip == 1:
@@ -57,9 +57,9 @@ def predict(features):
     anomaly_score = min(1, anomaly_score)
 
     result = {
-        "score": anomaly_score,
-        "isAnomaly": anomaly_score >= ANOMALY_THRESHOLD,
-        "threshold": ANOMALY_THRESHOLD
+        "score": float(anomaly_score),
+        "isAnomaly": bool(anomaly_score >= ANOMALY_THRESHOLD),
+        "threshold": float(ANOMALY_THRESHOLD)
     }
 
     print(json.dumps(result))

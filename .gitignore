@@ -1,3 +1,18 @@
-C:\Users\91821\OneDrive\Desktop\dssktop-jan25\Codes\projects\tds\.env.example
+# Gradle
+.gradle/
+build/
 
-C:\Users\91821\OneDrive\Desktop\dssktop-jan25\Codes\projects\tds\server\.env
+# Android / Java
+local.properties
+
+# Node
+node_modules/
+
+# Python
+.venv/
+__pycache__/
+
+# Env files
+.env
+.env.*
+!.env.example
