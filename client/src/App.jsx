@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import Alerts from "./pages/Alerts";
@@ -9,11 +9,27 @@ export default function App() {
     <BrowserRouter>
       <div className="layout">
         <nav className="navbar">
-          <div className="logo">🔐 Insider Threat Monitor</div>
+          <div className="logo">Insider Threat Monitor</div>
           <div className="nav-links">
-            <Link to="/">Dashboard</Link>
-            <Link to="/users">Users</Link>
-            <Link to="/alerts">Alerts</Link>
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+            >
+              Dashboard
+            </NavLink>
+            <NavLink
+              to="/users"
+              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+            >
+              Users
+            </NavLink>
+            <NavLink
+              to="/alerts"
+              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+            >
+              Alerts
+            </NavLink>
           </div>
         </nav>
 

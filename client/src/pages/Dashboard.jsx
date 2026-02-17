@@ -30,12 +30,12 @@ export default function Dashboard() {
       grouped[a.user_id] = Math.abs(a.anomaly_score);
     });
 
-    const chart = Object.keys(grouped).map(user => ({
-      user,
-      score: grouped[user]
-    }));
-
-    setRiskData(chart);
+    setRiskData(
+      Object.keys(grouped).map(user => ({
+        user,
+        score: grouped[user]
+      }))
+    );
   };
 
   const simulateAttack = async () => {
@@ -44,23 +44,24 @@ export default function Dashboard() {
   };
 
   return (
-    <div>
-      <h1>AI-Powered Insider Threat Dashboard</h1>
+    <div className="page dashboard-page">
+      <div className="page-header">
+        <h1>AI-Powered Insider Threat Dashboard</h1>
+        <button className="attack-btn" onClick={simulateAttack}>
+          Simulate Attack
+        </button>
+      </div>
 
-      <button className="attack-btn" onClick={simulateAttack}>
-        🚨 Simulate Attack
-      </button>
-
-      <div className="card-container">
-        <div className="card">
+      <div className="stats-grid">
+        <div className="stat-card">
           <h3>Total Users</h3>
           <p>{stats.users}</p>
         </div>
-        <div className="card">
+        <div className="stat-card">
           <h3>Total Logs</h3>
           <p>{stats.logs}</p>
         </div>
-        <div className="card danger">
+        <div className="stat-card danger">
           <h3>Anomalies</h3>
           <p>{stats.anomalies}</p>
         </div>
@@ -71,17 +72,19 @@ export default function Dashboard() {
           <h3>User Risk Heat</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={riskData}>
-              <XAxis dataKey="user" stroke="#94a3b8" />
+              <XAxis dataKey="user" />
               <Tooltip />
-              <Bar dataKey="score" fill="#ef4444" />
+              <Bar dataKey="score" />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <AlertPanel alerts={alerts.map(a => ({
-          user: a.user_id,
-          score: a.anomaly_score
-        }))} />
+        <AlertPanel
+          alerts={alerts.map(a => ({
+            user: a.user_id,
+            score: a.anomaly_score
+          }))}
+        />
       </div>
     </div>
   );

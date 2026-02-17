@@ -3,7 +3,7 @@ import { getRiskLevel } from "../utils/riskUtils";
 export default function AlertPanel({ alerts }) {
   return (
     <div className="alert-card">
-      <h3>🚨 Recent Alerts</h3>
+      <h3>Recent Alerts</h3>
 
       {alerts.length === 0 && <p>No anomalies detected.</p>}
 
