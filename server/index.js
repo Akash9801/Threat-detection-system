@@ -8,6 +8,10 @@ const logRoutes = require("./routes/logRoutes");
 
 const app = express();
 
+const userRoutes = require("./routes/userRoutes");
+app.use("/api/users", userRoutes);
+
+
 app.use(cors());
 app.use(bodyParser.json());
 

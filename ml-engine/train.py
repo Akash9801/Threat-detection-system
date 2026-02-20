@@ -1,69 +1,46 @@
 import os
+import json
 import joblib
-import numpy as np
-from pymongo import MongoClient
+import pandas as pd
 from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-from dotenv import load_dotenv
+from feature_engineering import compute_features
+from baseline import compute_user_baseline
 
-load_dotenv("../server/.env")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MONGO_URI = os.getenv("MONGO_URI")
+logs_path = os.path.join(BASE_DIR, "..", "dataset", "normal_logs.json")
+users_path = os.path.join(BASE_DIR, "..", "dataset", "users.json")
 
-MODEL_PATH = "../server/ml_models/isolation_model.pkl"
-SCALER_PATH = "../server/ml_models/scaler.pkl"
+# Load data
+df = pd.read_json(logs_path)
 
-ANOMALY_THRESHOLD = 0.85
+with open(users_path) as f:
+    users_list = json.load(f)
 
-def fetch_baseline_logs():
-    client = MongoClient(MONGO_URI)
-    db = client.get_database()
+user_profiles = {u["user_id"]: u for u in users_list}
 
-    logs_collection = db["logs"]
+# Compute baselines
+baselines = compute_user_baseline(df)
 
-    # Fetch only normal logs (not attack logs)
-    logs = logs_collection.find({
-        "sensitive_access": False
-    })
+# Generate training feature matrix
+X = []
 
-    feature_matrix = []
+for _, row in df.iterrows():
+    log_dict = row.to_dict()
+    feats = compute_features(log_dict, baselines, user_profiles)
+    X.append(list(feats.values()))
 
-    for log in logs:
-        features = [
-            log.get("login_hour", 0),
-            log.get("files_accessed", 0),
-            log.get("download_mb", 0),
-            0 if log.get("ip_address") == "192.168.1.10" else 1,
-            0 if log.get("device_id") == "DEV883" else 1
-        ]
-        feature_matrix.append(features)
+# Train model
+model = IsolationForest(
+    n_estimators=100,
+    contamination=0.05,
+    random_state=42
+)
 
-    return feature_matrix
+model.fit(X)
 
-def train():
-    training_data = fetch_baseline_logs()
+# Save artifacts
+joblib.dump(model, os.path.join(BASE_DIR, "model.pkl"))
+baselines.to_csv(os.path.join(BASE_DIR, "user_baseline.csv"), index=False)
 
-    if len(training_data) < 10:
-        print("Not enough baseline data to train.")
-        return
-
-    X = np.array(training_data)
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    model = IsolationForest(
-        n_estimators=100,
-        contamination=0.05,
-        random_state=42
-    )
-
-    model.fit(X_scaled)
-
-    joblib.dump(model, MODEL_PATH)
-    joblib.dump(scaler, SCALER_PATH)
-
-    print("Model trained successfully on", len(training_data), "samples")
-
-if __name__ == "__main__":
-    train()
+print("✅ Model trained successfully.")

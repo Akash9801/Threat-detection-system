@@ -1,59 +1,42 @@
-const { spawn } = require("child_process");
-const path = require("path");
+const axios = require("axios");
 
-const PYTHON_PATH = "python";
-const SCRIPT_PATH = path.join(__dirname, "../ml/anomaly_model.py");
-
-function trainModel(trainingData) {
-    return new Promise((resolve, reject) => {
-        const process = spawn(PYTHON_PATH, [
-            SCRIPT_PATH,
-            "train",
-            JSON.stringify(trainingData)
-        ]);
-
-        process.on("close", (code) => {
-            if (code === 0) {
-                resolve("Model trained");
-            } else {
-                reject("Training failed");
-            }
-        });
-    });
-}
-
-function detectAnomaly(features) {
-  return new Promise((resolve, reject) => {
-    const process = spawn("python", [
-      SCRIPT_PATH,
-      "predict",
-      JSON.stringify(features)
-    ]);
-
-    let result = "";
-    let errorOutput = "";
-
-    process.stdout.on("data", (data) => {
-      result += data.toString();
-    });
-
-    process.stderr.on("data", (data) => {
-      errorOutput += data.toString();
-    });
-
-    process.on("close", (code) => {
-      if (code === 0) {
-        resolve(JSON.parse(result));
-      } else {
-        console.error("Python Error:", errorOutput);
-        reject(errorOutput);
+/*
+-------------------------------------------------------
+DETECT ANOMALY USING FASTAPI ML SERVICE
+-------------------------------------------------------
+*/
+async function detectAnomaly(log) {
+  try {
+    const response = await axios.post(
+      "http://localhost:8000/predict",
+      {
+        log_id: log.log_id,
+        timestamp: log.timestamp instanceof Date
+          ? log.timestamp.toISOString()
+          : log.timestamp,
+        user_id: log.user_id,
+        login_hour: log.login_hour,
+        files_accessed: log.files_accessed,
+        download_mb: log.download_mb,
+        ip_address: log.ip_address,
+        device_id: log.device_id,
+        sensitive_access: log.sensitive_access,
+        primary_ip: log.primary_ip,
+        secondary_ip: log.secondary_ip,
+        primary_device: log.primary_device,
+        secondary_device: log.secondary_device
       }
-    });
-  });
+    );
+
+    return response.data;
+
+  } catch (err) {
+    console.error(
+      "ML Service Error:",
+      err.response?.data || err.message
+    );
+    throw err;
+  }
 }
 
-
-module.exports = {
-    trainModel,
-    detectAnomaly
-};
+module.exports = { detectAnomaly };

@@ -1,41 +1,51 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import API from "../services/api";
+import { useNavigate } from "react-router-dom";
 
 export default function Users() {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await axios.get("http://localhost:5000/api/logs/users");
-        setUsers(res.data);
-      } catch {
-        setError("Failed to load users");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchUsers();
   }, []);
 
+  const fetchUsers = async () => {
+    const res = await API.get("/users");
+    setUsers(res.data);
+  };
+
+  const filtered = users.filter(u =>
+    u.user_id.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
-    <div className="page users-page">
+    <div>
       <h1>Users</h1>
 
-      {loading && <p>Loading users...</p>}
-      {error && <p>{error}</p>}
+      <input
+        type="text"
+        placeholder="Search user..."
+        className="search-input"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
 
-      {!loading && !error && (
-        <div className="users-grid">
-          {users.map(user => (
-            <div className="user-card" key={user._id || user.user_id}>
-              <h3>{user.name || "Unknown User"}</h3>
-              <p><strong>ID:</strong> {user.user_id}</p>
-              <p><strong>Department:</strong> {user.department || "N/A"}</p>
-              <p><strong>Primary IP:</strong> {user.primary_ip || "N/A"}</p>
-              <p><strong>Primary Device:</strong> {user.primary_device || "N/A"}</p>
+      {filtered.length === 0 ? (
+        <p style={{ marginTop: "20px", color: "#f87171" }}>
+          No such user found
+        </p>
+      ) : (
+        <div className="user-grid">
+          {filtered.map(user => (
+            <div
+              key={user.user_id}
+              className="user-card"
+              onClick={() => navigate(`/users/${user.user_id}`)}
+            >
+              <h3>{user.user_id}</h3>
+              <p>{user.department}</p>
             </div>
           ))}
         </div>

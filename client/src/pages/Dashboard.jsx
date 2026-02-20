@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import API from "../services/api";
 import {
   BarChart,
   Bar,
   XAxis,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  Cell
 } from "recharts";
-import AlertPanel from "../components/AlertPanel";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ users: 0, logs: 0, anomalies: 0 });
@@ -16,52 +16,70 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 8000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
-    const statsRes = await axios.get("http://localhost:5000/api/logs/stats");
-    const alertsRes = await axios.get("http://localhost:5000/api/logs/alerts");
+    try {
+      const statsRes = await API.get("/logs/stats");
+      const alertsRes = await API.get("/logs/alerts");
 
-    setStats(statsRes.data);
-    setAlerts(alertsRes.data);
+      setStats(statsRes.data);
+      setAlerts(alertsRes.data);
 
-    const grouped = {};
-    alertsRes.data.forEach(a => {
-      grouped[a.user_id] = Math.abs(a.anomaly_score);
-    });
+      const grouped = {};
+      alertsRes.data.forEach(a => {
+        grouped[a.user_id] = Math.max(
+          grouped[a.user_id] || 0,
+          Math.abs(a.anomaly_score)
+        );
+      });
 
-    setRiskData(
-      Object.keys(grouped).map(user => ({
+      const chart = Object.keys(grouped).map(user => ({
         user,
         score: grouped[user]
-      }))
-    );
+      }));
+
+      setRiskData(chart);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const simulateAttack = async () => {
-    await axios.post("http://localhost:5000/api/logs/simulate");
+    await API.post("/logs/simulate");
     fetchData();
   };
 
+  const getHeatColor = (score) => {
+    const normalized = Math.min(score, 1);
+    const red = Math.floor(255 * normalized);
+    const blue = Math.floor(255 * (1 - normalized));
+    return `rgb(${red}, 60, ${blue})`;
+  };
+
   return (
-    <div className="page dashboard-page">
-      <div className="page-header">
-        <h1>AI-Powered Insider Threat Dashboard</h1>
+    <div>
+      <div className="dashboard-header">
+        <h1>AI‑Powered Insider Threat Dashboard</h1>
         <button className="attack-btn" onClick={simulateAttack}>
           Simulate Attack
         </button>
       </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
+      <div className="card-container">
+        <div className="card">
           <h3>Total Users</h3>
           <p>{stats.users}</p>
         </div>
-        <div className="stat-card">
+
+        <div className="card">
           <h3>Total Logs</h3>
           <p>{stats.logs}</p>
         </div>
-        <div className="stat-card danger">
+
+        <div className="card danger">
           <h3>Anomalies</h3>
           <p>{stats.anomalies}</p>
         </div>
@@ -69,22 +87,51 @@ export default function Dashboard() {
 
       <div className="dashboard-grid">
         <div className="chart-card">
-          <h3>User Risk Heat</h3>
+          <h3>User Risk Intensity</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={riskData}>
-              <XAxis dataKey="user" />
+              <XAxis dataKey="user" stroke="#94a3b8" />
               <Tooltip />
-              <Bar dataKey="score" />
+              <Bar dataKey="score">
+                {riskData.map((entry, index) => (
+                  <Cell key={index} fill={getHeatColor(entry.score)} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <AlertPanel
-          alerts={alerts.map(a => ({
-            user: a.user_id,
-            score: a.anomaly_score
-          }))}
-        />
+        <div className="leaderboard">
+          <h3>Risk Leaderboard</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Score</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {riskData
+                .sort((a, b) => b.score - a.score)
+                .map((u, i) => (
+                  <tr key={i}>
+                    <td>{u.user}</td>
+                    <td>{u.score.toFixed(2)}</td>
+                    <td style={{ color: getHeatColor(u.score) }}>
+                      {u.score > 0.7
+                        ? "Critical"
+                        : u.score > 0.4
+                        ? "High"
+                        : u.score > 0.2
+                        ? "Medium"
+                        : "Low"}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

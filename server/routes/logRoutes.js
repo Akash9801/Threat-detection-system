@@ -1,16 +1,22 @@
 const express = require("express");
 const router = express.Router();
+
 const { generateBaseline } = require("../scripts/baselineGenerator");
 const Log = require("../models/Log");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
 const { detectAnomaly } = require("../services/mlService");
 
+
 router.post("/", async (req, res) => {
   try {
     const log = await Log.create(req.body);
 
-    const mlResult = await detectAnomaly(req.body);
+    const mlResult = await detectAnomaly(log);
+
+    console.log("===== ML RESULT (NORMAL LOG) =====");
+    console.log(mlResult);
+    console.log("===================================");
 
     if (mlResult && mlResult.prediction === -1) {
       await Alert.create({
@@ -24,11 +30,13 @@ router.post("/", async (req, res) => {
     }
 
     res.status(201).json({ success: true, log, mlResult });
+
   } catch (err) {
-    console.error(err);
+    console.error("Create Log Error:", err.message);
     res.status(500).json({ error: "Server Error" });
   }
 });
+
 
 router.get("/alerts", async (req, res) => {
   try {
@@ -38,6 +46,7 @@ router.get("/alerts", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch alerts" });
   }
 });
+
 
 router.get("/stats", async (req, res) => {
   try {
@@ -51,6 +60,8 @@ router.get("/stats", async (req, res) => {
   }
 });
 
+
+
 router.get("/users", async (req, res) => {
   try {
     const users = await User.find().sort({ user_id: 1 });
@@ -60,47 +71,80 @@ router.get("/users", async (req, res) => {
   }
 });
 
+
+
 router.post("/simulate", async (req, res) => {
   try {
     const users = await User.find();
-
     if (!users.length) {
       return res.status(400).json({ error: "No users found" });
     }
 
-    const randomUser = users[Math.floor(Math.random() * users.length)];
+    const randomUser =
+      users[Math.floor(Math.random() * users.length)];
+
+    const recentLogs = await Log.find({
+      user_id: randomUser.user_id
+    }).limit(20);
+
+    if (!recentLogs.length) {
+      return res.status(400).json({
+        error: "No baseline logs found for user"
+      });
+    }
+
+    const extremeFactor =
+      20 + Math.random() * 20;
 
     const attackLog = {
       log_id: "attack_" + Date.now(),
       timestamp: new Date(),
       user_id: randomUser.user_id,
-      login_hour: 2,
-      files_accessed: 300,
-      download_mb: 1500,
-      ip_address: "99.99.99.99",
-      device_id: "UNKNOWN_DEVICE",
-      sensitive_access: true
+
+      login_hour:
+        Math.random() > 0.5
+          ? Math.random() * 2
+          : 22 + Math.random() * 1.5,
+
+      files_accessed:
+        randomUser.mu_files * extremeFactor,
+
+      download_mb:
+        randomUser.mu_download * (extremeFactor + 5),
+
+      ip_address: `201.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+
+      device_id:
+        "HACK_" + Math.floor(Math.random() * 10000),
+
+      sensitive_access: true,
+
+      primary_ip: randomUser.primary_ip,
+      secondary_ip: randomUser.secondary_ip,
+      primary_device: randomUser.primary_device,
+      secondary_device: randomUser.secondary_device
     };
+
+    console.log("===== ATTACK LOG SENT TO ML =====");
+    console.log(attackLog);
+    console.log("==================================");
 
     const log = await Log.create(attackLog);
 
-    const features = [
-      attackLog.login_hour,
-      attackLog.files_accessed,
-      attackLog.download_mb,
-      1,
-      1
-    ];
+    const mlResult = await detectAnomaly(attackLog);
 
-    const mlResult = await detectAnomaly(features);
+    console.log("===== ML RESULT (SIMULATION) =====");
+    console.log(mlResult);
+    console.log("===================================");
 
-    if (mlResult.isAnomaly) {
+    if (mlResult && mlResult.prediction === -1) {
       await Alert.create({
         log_id: log.log_id,
         user_id: log.user_id,
         timestamp: log.timestamp,
-        anomaly_score: mlResult.score,
-        threshold: mlResult.threshold
+        anomaly_score: mlResult.anomaly_score,
+        prediction: mlResult.prediction,
+        feature_breakdown: mlResult.feature_breakdown
       });
     }
 
@@ -109,11 +153,13 @@ router.post("/simulate", async (req, res) => {
       attackLog,
       mlResult
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("Simulation Error:", err.message);
     res.status(500).json({ error: "Simulation failed" });
   }
 });
+
 
 router.post("/baseline", async (req, res) => {
   try {
@@ -124,5 +170,6 @@ router.post("/baseline", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 module.exports = router;
