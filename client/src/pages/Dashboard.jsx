@@ -48,6 +48,10 @@ export default function Dashboard() {
       console.error(err);
     }
   };
+  const simulateLogin = async () => {
+    await API.post("/logs/simulate-normal");
+    fetchData();
+  }
 
   const simulateAttack = async () => {
     await API.post("/logs/simulate");
@@ -88,9 +92,14 @@ export default function Dashboard() {
     <div>
       <div className="dashboard-header">
         <h1>Insider Threat Dashboard</h1>
+        <div className="dash-btn">
+        <button className="generate-btn" onClick={simulateLogin}>
+          Simulate Login
+          </button>
         <button className="attack-btn" onClick={simulateAttack}>
           Simulate Attack
         </button>
+        </div>
       </div>
 
       <div className="card-container">

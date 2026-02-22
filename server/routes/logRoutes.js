@@ -196,6 +196,145 @@ router.post("/simulate", async (req, res) => {
 });
 
 
+
+router.post("/simulate-normal", async (req, res) => {
+  try {
+    const users = await User.find();
+    if (!users.length) {
+      return res.status(400).json({ error: "No users found" });
+    }
+
+    const randomUser =
+      users[Math.floor(Math.random() * users.length)];
+
+    const recentLogs = await Log.find({
+      user_id: randomUser.user_id
+    }).limit(20);
+
+    if (!recentLogs.length) {
+      return res.status(400).json({
+        error: "No baseline logs found for user"
+      });
+    }
+
+    const avgLogin =
+      recentLogs.reduce((a, b) => a + b.login_hour, 0) /
+      recentLogs.length;
+
+    const avgFiles =
+      recentLogs.reduce((a, b) => a + b.files_accessed, 0) /
+      recentLogs.length;
+
+    const avgDownload =
+      recentLogs.reduce((a, b) => a + b.download_mb, 0) /
+      recentLogs.length;
+
+    const normalLog = {
+      log_id: "normal_" + Date.now(),
+      timestamp: new Date(),
+      user_id: randomUser.user_id,
+
+      login_hour: avgLogin + (Math.random() * 2 - 1),
+      files_accessed: avgFiles + (Math.random() * 4 - 2),
+      download_mb: avgDownload + (Math.random() * 15 - 7),
+
+      ip_address: randomUser.primary_ip,
+      device_id: randomUser.primary_device,
+      sensitive_access: false,
+
+      primary_ip: randomUser.primary_ip,
+      secondary_ip: randomUser.secondary_ip,
+      primary_device: randomUser.primary_device,
+      secondary_device: randomUser.secondary_device
+    };
+
+    console.log("===== NORMAL LOG SENT TO ML =====");
+    console.log(normalLog);
+    console.log("==================================");
+
+    const log = await Log.create(normalLog);
+
+    const mlResult = await detectAnomaly(normalLog);
+
+    console.log("===== ML RESULT (NORMAL SIMULATION) =====");
+    console.log(mlResult);
+    console.log("==========================================");
+
+    if (mlResult && mlResult.prediction === -1) {
+      await Alert.create({
+        log_id: log.log_id,
+        user_id: log.user_id,
+        timestamp: log.timestamp,
+        anomaly_score: mlResult.anomaly_score,
+        prediction: mlResult.prediction,
+        risk_level: mlResult.risk_level,
+        feature_breakdown: mlResult.feature_breakdown
+      });
+    }
+
+    res.json({
+      success: true,
+      normalLog,
+      mlResult
+    });
+
+  } catch (err) {
+    console.error("Normal Simulation Error:", err.message);
+    res.status(500).json({ error: "Simulation failed" });
+  }
+});
+
+
+router.get("/user/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const days = parseInt(req.query.days) || 30;
+
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - days);
+
+    const logs = await Log.find({
+      user_id: userId,
+      timestamp: { $gte: fromDate }
+    }).sort({ timestamp: -1 });
+
+    if (!logs.length) {
+      return res.json({
+        summary: {
+          total_sessions: 0,
+          total_anomalies: 0,
+          avg_login_hour: 0,
+          total_download: 0
+        },
+        logs: []
+      });
+    }
+
+    const totalSessions = logs.length;
+    const totalAnomalies = logs.filter(l => l.sensitive_access).length;
+
+    const avgLogin =
+      logs.reduce((a, b) => a + b.login_hour, 0) / totalSessions;
+
+    const totalDownload =
+      logs.reduce((a, b) => a + b.download_mb, 0);
+
+    res.json({
+      summary: {
+        total_sessions: totalSessions,
+        total_anomalies: totalAnomalies,
+        avg_login_hour: avgLogin.toFixed(2),
+        total_download: totalDownload.toFixed(2)
+      },
+      logs
+    });
+
+  } catch (err) {
+    console.error("User Activity Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch user activity" });
+  }
+});
+
 router.post("/baseline", async (req, res) => {
   try {
     const { userId } = req.body;
