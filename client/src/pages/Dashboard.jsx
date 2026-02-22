@@ -1,17 +1,8 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell
-} from "recharts";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ users: 0, logs: 0, anomalies: 0 });
-  const [alerts, setAlerts] = useState([]);
   const [riskData, setRiskData] = useState([]);
 
   useEffect(() => {
@@ -26,22 +17,33 @@ export default function Dashboard() {
       const alertsRes = await API.get("/logs/alerts");
 
       setStats(statsRes.data);
-      setAlerts(alertsRes.data);
 
       const grouped = {};
+
       alertsRes.data.forEach(a => {
-        grouped[a.user_id] = Math.max(
-          grouped[a.user_id] || 0,
-          Math.abs(a.anomaly_score)
-        );
+        if (!grouped[a.user_id]) {
+          grouped[a.user_id] = {
+            score: 0,
+            risk: "low"
+          };
+        }
+
+        const absScore = Math.abs(a.anomaly_score);
+
+        if (absScore > grouped[a.user_id].score) {
+          grouped[a.user_id].score = absScore;
+          grouped[a.user_id].risk = a.risk_level || "low";
+        }
       });
 
       const chart = Object.keys(grouped).map(user => ({
         user,
-        score: grouped[user]
+        score: grouped[user].score,
+        risk: grouped[user].risk
       }));
 
       setRiskData(chart);
+
     } catch (err) {
       console.error(err);
     }
@@ -52,17 +54,40 @@ export default function Dashboard() {
     fetchData();
   };
 
-  const getHeatColor = (score) => {
-    const normalized = Math.min(score, 1);
-    const red = Math.floor(255 * normalized);
-    const blue = Math.floor(255 * (1 - normalized));
-    return `rgb(${red}, 60, ${blue})`;
+  const getRiskColor = (risk) => {
+    switch (risk) {
+      case "high":
+        return "#ef4444";
+      case "moderate":
+        return "#f59e0b";
+      case "low":
+        return "#22c55e";
+      default:
+        return "#94a3b8";
+    }
   };
+
+  const severityRank = {
+    high: 3,
+    moderate: 2,
+    low: 1
+  };
+
+  const sortedRiskData = [...riskData].sort((a, b) => {
+    if (severityRank[b.risk] !== severityRank[a.risk]) {
+      return severityRank[b.risk] - severityRank[a.risk];
+    }
+    return b.score - a.score;
+  });
+
+  const highCount = riskData.filter(u => u.risk === "high").length;
+  const moderateCount = riskData.filter(u => u.risk === "moderate").length;
+  const lowCount = riskData.filter(u => u.risk === "low").length;
 
   return (
     <div>
       <div className="dashboard-header">
-        <h1>AI‑Powered Insider Threat Dashboard</h1>
+        <h1>Insider Threat Dashboard</h1>
         <button className="attack-btn" onClick={simulateAttack}>
           Simulate Attack
         </button>
@@ -85,53 +110,52 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="dashboard-grid">
-        <div className="chart-card">
-          <h3>User Risk Intensity</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={riskData}>
-              <XAxis dataKey="user" stroke="#94a3b8" />
-              <Tooltip />
-              <Bar dataKey="score">
-                {riskData.map((entry, index) => (
-                  <Cell key={index} fill={getHeatColor(entry.score)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      <div className="card-container">
+        <div className="card" style={{ borderLeft: "6px solid #ef4444" }}>
+          <h3>High Risk</h3>
+          <p>{highCount}</p>
         </div>
 
-        <div className="leaderboard">
-          <h3>Risk Leaderboard</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Score</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {riskData
-                .sort((a, b) => b.score - a.score)
-                .map((u, i) => (
-                  <tr key={i}>
-                    <td>{u.user}</td>
-                    <td>{u.score.toFixed(2)}</td>
-                    <td style={{ color: getHeatColor(u.score) }}>
-                      {u.score > 0.7
-                        ? "Critical"
-                        : u.score > 0.4
-                        ? "High"
-                        : u.score > 0.2
-                        ? "Medium"
-                        : "Low"}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+        <div className="card" style={{ borderLeft: "6px solid #f59e0b" }}>
+          <h3>Moderate Risk</h3>
+          <p>{moderateCount}</p>
         </div>
+
+        <div className="card" style={{ borderLeft: "6px solid #22c55e" }}>
+          <h3>Low Risk</h3>
+          <p>{lowCount}</p>
+        </div>
+      </div>
+
+      <div className="leaderboard">
+        <h3>Risk Leaderboard (Per user)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>User</th>
+              <th>Score</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRiskData.map((u, i) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{u.user}</td>
+                <td>{u.score.toFixed(3)}</td>
+                <td
+                  style={{
+                    color: getRiskColor(u.risk),
+                    fontWeight: "bold"
+                  }}
+                >
+                  {u.risk?.toUpperCase()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

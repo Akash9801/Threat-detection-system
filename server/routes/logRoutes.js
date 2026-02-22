@@ -25,6 +25,7 @@ router.post("/", async (req, res) => {
         timestamp: log.timestamp,
         anomaly_score: mlResult.anomaly_score,
         prediction: mlResult.prediction,
+        risk_level: mlResult.risk_level, 
         feature_breakdown: mlResult.feature_breakdown
       });
     }
@@ -84,7 +85,8 @@ router.post("/simulate", async (req, res) => {
       users[Math.floor(Math.random() * users.length)];
 
     const recentLogs = await Log.find({
-      user_id: randomUser.user_id
+      user_id: randomUser.user_id,
+      sensitive_access: false
     }).limit(20);
 
     if (!recentLogs.length) {
@@ -93,8 +95,45 @@ router.post("/simulate", async (req, res) => {
       });
     }
 
-    const extremeFactor =
-      20 + Math.random() * 20;
+    const avgLogin =
+      recentLogs.reduce((a, b) => a + b.login_hour, 0) /
+      recentLogs.length;
+
+    const avgFiles =
+      recentLogs.reduce((a, b) => a + b.files_accessed, 0) /
+      recentLogs.length;
+
+    const avgDownload =
+      recentLogs.reduce((a, b) => a + b.download_mb, 0) /
+      recentLogs.length;
+
+    const stdLogin = Math.sqrt(
+      recentLogs.reduce((a, b) => a + Math.pow(b.login_hour - avgLogin, 2), 0) /
+      recentLogs.length
+    );
+
+    const stdFiles = Math.sqrt(
+      recentLogs.reduce((a, b) => a + Math.pow(b.files_accessed - avgFiles, 2), 0) /
+      recentLogs.length
+    );
+
+    const stdDownload = Math.sqrt(
+      recentLogs.reduce((a, b) => a + Math.pow(b.download_mb - avgDownload, 2), 0) /
+      recentLogs.length
+    );
+
+    const riskBands = [
+      { label: "low", min: 3, max: 5 },
+      { label: "moderate", min: 6, max: 9 },
+      { label: "high", min: 12, max: 18 }
+    ];
+
+    const selectedRisk =
+      riskBands[Math.floor(Math.random() * riskBands.length)];
+
+    const randomZ = () =>
+      selectedRisk.min +
+      Math.random() * (selectedRisk.max - selectedRisk.min);
 
     const attackLog = {
       log_id: "attack_" + Date.now(),
@@ -102,21 +141,16 @@ router.post("/simulate", async (req, res) => {
       user_id: randomUser.user_id,
 
       login_hour:
-        Math.random() > 0.5
-          ? Math.random() * 2
-          : 22 + Math.random() * 1.5,
+        avgLogin + (stdLogin || 1) * (Math.random() > 0.5 ? randomZ() : -randomZ()),
 
       files_accessed:
-        randomUser.mu_files * extremeFactor,
+        avgFiles + (stdFiles || 1) * randomZ(),
 
       download_mb:
-        randomUser.mu_download * (extremeFactor + 5),
+        avgDownload + (stdDownload || 1) * randomZ(),
 
       ip_address: `201.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-
-      device_id:
-        "HACK_" + Math.floor(Math.random() * 10000),
-
+      device_id: "HACK_" + Math.floor(Math.random() * 1000),
       sensitive_access: true,
 
       primary_ip: randomUser.primary_ip,
@@ -144,6 +178,7 @@ router.post("/simulate", async (req, res) => {
         timestamp: log.timestamp,
         anomaly_score: mlResult.anomaly_score,
         prediction: mlResult.prediction,
+        risk_level: mlResult.risk_level, 
         feature_breakdown: mlResult.feature_breakdown
       });
     }

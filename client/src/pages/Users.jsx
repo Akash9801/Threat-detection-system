@@ -12,40 +12,61 @@ export default function Users() {
   }, []);
 
   const fetchUsers = async () => {
-    const res = await API.get("/users");
-    setUsers(res.data);
+    try {
+      const res = await API.get("/logs/users");
+      setUsers(res.data);
+    } catch (err) {
+      console.error("Fetch users error:", err);
+    }
   };
 
-  const filtered = users.filter(u =>
-    u.user_id.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = users
+    .filter(user =>
+      user.user_id.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => a.user_id.localeCompare(b.user_id));
 
   return (
-    <div>
-      <h1>Users</h1>
+    <div className="users-container">
+      <div className="users-header">
+        <h1>Organization Users</h1>
 
-      <input
-        type="text"
-        placeholder="Search user..."
-        className="search-input"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+        <div className="search-wrapper">
+          <input
+            type="text"
+            placeholder="Search by User ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
 
-      {filtered.length === 0 ? (
-        <p style={{ marginTop: "20px", color: "#f87171" }}>
-          No such user found
-        </p>
+      {filteredUsers.length === 0 ? (
+        <div className="no-users">
+          <h2>No Users Matched</h2>
+          <p>Try adjusting your search query.</p>
+        </div>
       ) : (
-        <div className="user-grid">
-          {filtered.map(user => (
+        <div className="users-grid">
+          {filteredUsers.map((user, index) => (
             <div
               key={user.user_id}
               className="user-card"
               onClick={() => navigate(`/users/${user.user_id}`)}
             >
-              <h3>{user.user_id}</h3>
-              <p>{user.department}</p>
+              <div className="left-section">
+                <div className="user-avatar">
+                  {index + 1}
+                </div>
+
+                <span className="user-name">
+                  {user.user_id}
+                </span>
+              </div>
+
+              <span className="user-department">
+                {user.department}
+              </span>
             </div>
           ))}
         </div>
