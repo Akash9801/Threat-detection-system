@@ -8,6 +8,32 @@ const User = require("../models/User");
 const { detectAnomaly } = require("../services/mlService");
 
 
+const fs = require("fs");
+const path = require("path");
+
+let normalTrainingData = {};
+
+const loadNormalTrainingData = () => {
+  const logsPath = path.join(
+    __dirname,
+    "../../dataset/normal_logs.json"
+  );
+
+  const raw = fs.readFileSync(logsPath, "utf-8");
+  const logs = JSON.parse(raw);
+
+  logs.forEach(log => {
+    if (!normalTrainingData[log.user_id]) {
+      normalTrainingData[log.user_id] = [];
+    }
+    normalTrainingData[log.user_id].push(log);
+  });
+
+  console.log("✅ Normal training data loaded");
+};
+
+loadNormalTrainingData();
+
 router.post("/", async (req, res) => {
   try {
     const log = await Log.create(req.body);
@@ -207,36 +233,35 @@ router.post("/simulate-normal", async (req, res) => {
     const randomUser =
       users[Math.floor(Math.random() * users.length)];
 
-    const recentLogs = await Log.find({
-      user_id: randomUser.user_id
-    }).limit(20);
+    const userNormalLogs =
+      normalTrainingData[randomUser.user_id];
 
-    if (!recentLogs.length) {
+    if (!userNormalLogs || !userNormalLogs.length) {
       return res.status(400).json({
-        error: "No baseline logs found for user"
+        error: "No training normal logs found for user"
       });
     }
 
-    const avgLogin =
-      recentLogs.reduce((a, b) => a + b.login_hour, 0) /
-      recentLogs.length;
+    // Randomly sample a real training-normal log
+    const baseLog =
+      userNormalLogs[
+        Math.floor(Math.random() * userNormalLogs.length)
+      ];
 
-    const avgFiles =
-      recentLogs.reduce((a, b) => a + b.files_accessed, 0) /
-      recentLogs.length;
-
-    const avgDownload =
-      recentLogs.reduce((a, b) => a + b.download_mb, 0) /
-      recentLogs.length;
-
+    // Tiny noise to avoid exact duplication
     const normalLog = {
       log_id: "normal_" + Date.now(),
       timestamp: new Date(),
       user_id: randomUser.user_id,
 
-      login_hour: avgLogin + (Math.random() * 2 - 1),
-      files_accessed: avgFiles + (Math.random() * 4 - 2),
-      download_mb: avgDownload + (Math.random() * 15 - 7),
+      login_hour:
+        baseLog.login_hour + (Math.random() * 0.3 - 0.15),
+
+      files_accessed:
+        baseLog.files_accessed + (Math.random() * 1 - 0.5),
+
+      download_mb:
+        baseLog.download_mb + (Math.random() * 3 - 1.5),
 
       ip_address: randomUser.primary_ip,
       device_id: randomUser.primary_device,
@@ -250,15 +275,12 @@ router.post("/simulate-normal", async (req, res) => {
 
     console.log("===== NORMAL LOG SENT TO ML =====");
     console.log(normalLog);
-    console.log("==================================");
 
     const log = await Log.create(normalLog);
-
     const mlResult = await detectAnomaly(normalLog);
 
     console.log("===== ML RESULT (NORMAL SIMULATION) =====");
     console.log(mlResult);
-    console.log("==========================================");
 
     if (mlResult && mlResult.prediction === -1) {
       await Alert.create({
@@ -283,7 +305,6 @@ router.post("/simulate-normal", async (req, res) => {
     res.status(500).json({ error: "Simulation failed" });
   }
 });
-
 
 router.get("/user/:userId", async (req, res) => {
   try {

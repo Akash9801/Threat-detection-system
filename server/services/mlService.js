@@ -8,7 +8,7 @@ DETECT ANOMALY USING FASTAPI ML SERVICE
 async function detectAnomaly(log) {
   try {
     const response = await axios.post(
-      "http://localhost:8000/predict",
+      `${process.env.ML_SERVICE_URL}/predict`,
       {
         log_id: log.log_id,
         timestamp: log.timestamp instanceof Date

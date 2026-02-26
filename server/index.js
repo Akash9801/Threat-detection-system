@@ -12,7 +12,9 @@ const userRoutes = require("./routes/userRoutes");
 app.use("/api/users", userRoutes);
 
 
-app.use(cors());
+app.use(cors({
+  origin: "*"
+}));
 app.use(bodyParser.json());
 
 mongoose.connect(process.env.MONGO_URI)
