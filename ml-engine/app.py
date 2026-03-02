@@ -21,5 +21,5 @@ class Log(BaseModel):
 
 @app.post("/predict")
 def predict(log: Log):
-    result = predict_anomaly(log.dict())
+    result = predict_anomaly(log.model_dump())
     return result

@@ -6,6 +6,7 @@ const alertSchema = new mongoose.Schema({
   timestamp: Date,
   anomaly_score: Number,
   prediction: Number,
+  risk_level: String, 
   feature_breakdown: Object
 });
 
